@@ -182,6 +182,10 @@ details.doc[open]>summary{border-bottom:1px solid var(--line)}
 .fact{display:grid;grid-template-columns:118px 1fr;gap:10px}
 .fact>.label{padding-top:2px}
 .src{color:var(--muted);font-size:13.5px}
+.srclinks{display:flex;flex-wrap:wrap;gap:8px}
+.srcbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 13px;font-size:13.5px;text-decoration:none;line-height:1.3}
+.srcbtn:hover{border-color:var(--acc)}
+.srcbtn.main{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:700}
 .takeme{display:inline-flex;align-items:center;gap:8px;background:var(--rose);color:#fff;border-radius:999px;padding:9px 16px;text-decoration:none;font-weight:700;font-size:15px;width:fit-content}
 .takeme:hover{filter:brightness(1.08)}
 .links{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}
@@ -586,26 +590,24 @@ function badges(q){
   if ((q.f || '').includes('r')) b += '<span class="badge b-reb">Rebuilt</span>';
   return b;
 }
-function slideRefs(q){
-  return (q.s || []).map(([f, p]) => { const deck = M.decks[f], dl = LEC[+f.slice(1, 3)]; return `<a target="_blank" rel="noopener" href="${deck.u}">${esc(DOC[dl.d].en)} · ${esc(deck.n)}${p && p.length ? ', slide' + (p.length > 1 ? 's ' : ' ') + p.join(', ') : ''}</a>`; }).join('<br>');
-}
 function sourceBlock(q){
-  const l = LEC[q.L], d = DOC[l.d];
-  const first = (q.s && q.s[0] && M.decks[q.s[0][0]]) ? M.decks[q.s[0][0]].u : (l.slx[0] ? l.slx[0][0] : (l.xo[0] ? l.xo[0][0] : l.mn));
-  const pages = q.s && q.s[0] && q.s[0][1] && q.s[0][1].length ? ' · slide ' + q.s[0][1].join(', ') : '';
-  const links = [];
-  l.slx.forEach(x => { if (x[0] !== first) links.push(`<a target="_blank" rel="noopener" href="${x[0]}">Slides${x[1] ? ': ' + esc(x[1]) : ''}</a>`); });
-  if (l.sh) links.push(`<a target="_blank" rel="noopener" href="${l.sh[0]}">Wareed sheet: ${esc(l.sh[1])}</a>`);
-  if (l.rn) links.push(`<a target="_blank" rel="noopener" href="${l.rn}">Rand’s transcript</a>`);
-  l.bt.forEach(x => links.push(`<a target="_blank" rel="noopener" href="${x[0]}">${x[1] && x[1].startsWith('!') ? esc(x[1].slice(1)) : 'Batool’s transcript' + (x[1] ? ': ' + esc(x[1]) : '')}</a>`));
-  if (l.rd) links.push(`<a target="_blank" rel="noopener" href="${l.rd}">Transcript</a>`);
-  links.push(`<a target="_blank" rel="noopener" href="${M.remake}">OBGYN Remake (Ahmed Moath)</a>`);
-  if (l.mn) links.push(`<a target="_blank" rel="noopener" href="${l.mn}">Year 5 (M.N.) post</a>`);
+  const l = LEC[q.L], d = DOC[l.d], A = (u, t, cls) => `<a class="srcbtn${cls ? ' ' + cls : ''}" target="_blank" rel="noopener" href="${u}">${t} ↗</a>`;
+  const links = [], cited = new Set();
+  (q.s || []).forEach(([f, p]) => { const deck = M.decks[f], dl = LEC[+f.slice(1, 3)]; if (!deck) return; cited.add(deck.u);
+    links.push(A(deck.u, `Slides · ${esc(DOC[dl.d].en)} · ${esc(deck.n)}${p && p.length ? ' · slide' + (p.length > 1 ? 's ' : ' ') + p.join(', ') : ''}`, 'main')); });
+  l.slx.forEach(x => { if (!cited.has(x[0])) links.push(A(x[0], `Slides · ${esc(d.en)} · ${esc(l.t)}${x[1] ? ': ' + esc(x[1]) : ''}`, cited.size ? '' : 'main')); });
+  l.xo.forEach(x => links.push(A(x[0], `Summary${x[1] ? ': ' + esc(x[1]) : ''}`)));
+  if (l.sh) links.push(A(l.sh[0], `Wareed sheet · ${esc(l.sh[1])}`));
+  if (l.rn) links.push(A(l.rn, 'Rand’s transcript'));
+  l.bt.forEach(x => links.push(A(x[0], x[1] && x[1].startsWith('!') ? esc(x[1].slice(1)) : 'Batool’s transcript' + (x[1] ? ' · ' + esc(x[1]) : ''))));
+  if (l.rd) links.push(A(l.rd, 'Transcript'));
+  links.push(A(M.remake, 'OBGYN Remake · Ahmed Moath'));
+  if (l.mn) links.push(A(l.mn, 'Year 5 (M.N.) post'));
   return `<div class="slide"><span class="label">${q.s && q.s.length ? 'From the slides' : 'Where to read it'}</span>
-      ${q.sl ? HF(q.id, 'w', q.sl, 'div') : `<div class="src">${q.L === 44 ? 'This lecture is studied from Hacker & Moore, chapter 19 (the doctor’s instruction).' : 'This point is not written on the slides; it comes from the transcripts or the textbook.'}</div>`}
-      ${q.s && q.s.length ? `<div class="src">${slideRefs(q)}</div>` : ''}
-      <a class="takeme" target="_blank" rel="noopener" href="${first}"><span class="ar">خذني لمكان الشرح</span> ↗<span class="mono" style="font-weight:500;font-size:12px">${pages}</span></a>
-      <div class="src">Lecture: ${esc(l.t)} · ${esc(d.en)}</div><div class="links">${links.join('')}</div></div>`;
+      ${q.sl ? HF(q.id, 'w', q.sl, 'div') : `<div class="src">${q.L === 44 ? 'This lecture is studied from Hacker & Moore, chapter 19 (the doctor’s instruction).' : 'This point is not written on the slides; read it in the transcripts or the sheets below.'}</div>`}
+      <div class="src">Lecture: ${esc(l.t)} · ${esc(d.en)}</div>
+      <span class="label" style="margin-top:4px">Take me to the explanation</span>
+      <div class="srclinks">${links.join('')}</div></div>`;
 }
 function feedback(q, picked){
   const id = q.id, ok = picked === q.a;
