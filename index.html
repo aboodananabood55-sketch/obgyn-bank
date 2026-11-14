@@ -51,7 +51,7 @@ a{color:var(--acc)}
 .stats{display:flex;flex-wrap:wrap;gap:8px 24px;padding:10px 0 16px;border-bottom:1px solid var(--line)}
 .stat b{display:block;font-family:var(--f-mono);font-size:19px;font-weight:600}
 .stat span{font-size:13px;color:var(--muted)}
-.searchbox{position:sticky;top:0;z-index:6;background:var(--bg);padding:12px 0 10px;margin-top:4px}
+.searchbox{position:relative;z-index:6;background:var(--bg);padding:12px 0 10px;margin-top:4px}
 .searchbox .in{display:flex;gap:8px;align-items:center;background:var(--surface);border:1.5px solid var(--line);border-radius:999px;padding:4px 6px 4px 16px}
 .searchbox .in:focus-within{border-color:var(--acc)}
 .searchbox input{flex:1;border:0;background:none;padding:9px 0;outline:0;min-width:0;font-size:16px}
@@ -135,7 +135,8 @@ details.doc[open]>summary{border-bottom:1px solid var(--line)}
 .iconbtn{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 11px;cursor:pointer;font-size:14px;white-space:nowrap}
 .topbar .t{flex:1;min-width:0}
 .topbar .t b{display:block;font-family:var(--f-display);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.topbar .t span{font-size:12.5px;color:var(--muted)}
+.topbar .t span{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.go[disabled]{opacity:.45;cursor:default}
 .track{max-width:780px;margin:8px auto 0;display:flex;gap:2px;height:5px}
 .track i{flex:1;border-radius:2px;background:var(--sunk)}
 .track i.ok{background:var(--ok)} .track i.bad{background:var(--bad)} .track i.cur{background:var(--acc)} .track i.don{background:var(--muted)}
@@ -265,6 +266,9 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
   .ph{margin-bottom:10px}
   .ph h1{font-size:18pt}
   .pkey{break-before:page}
+  html,body{background:#fff!important}
+  .pst{break-after:avoid}
+  .case{break-after:avoid}
   .pkey table{border-collapse:collapse;font-size:10pt}
   .pkey td{border:1px solid #bbb;padding:2px 6px}
   .pst{break-before:auto;margin:10px 0 2px;font-weight:700;font-size:12.5pt}
@@ -299,7 +303,7 @@ const TYPES = M.types;
 
 /* ---------- answers ---------- */
 const lastOk = id => S.last[id] ? S.last[id][0] === Q[id].a : null;
-const NOFB = {mis:1, cor:1, retry:1};
+const NOFB = {mis:1, retry:1};
 const isExam = cat => /^m:/.test(cat) || (S.xp[cat] && S.xp[cat].on);
 function ans(cat, id){
   const x = (S.a[cat] || {})[id]; if (x !== undefined) return x;
@@ -414,7 +418,10 @@ let view = {name:'home'}, homeY = 0;
 let go = function(v){ if (view.name === 'home') homeY = window.scrollY; view = v; render(); window.scrollTo({top: v.name === 'home' ? homeY : 0}); };
 const pct = t => t.done ? Math.round(100 * t.ok / t.done) + '%' : '';
 function progBar(cat, list){
+  if (/^m:/.test(cat) && !(S.xp[cat] || {}).done){ const a = list.filter(i => (S.a[cat] || {})[i] !== undefined).length;
+    return `<div class="prog"><span class="mono">${a}/${list.length}</span><span class="mono">${a ? 'in progress · marks at the end' : 'not started'}</span></div><div class="bar"><i style="width:${100 * a / (list.length || 1)}%;background:var(--muted)"></i></div>`; }
   const t = tally(cat, list), n = list.length || 1;
+  if (/^m:/.test(cat)) return `<div class="prog"><span class="mono">score ${t.ok}/${list.length}</span><span class="mono">${Math.round(100 * t.ok / n)}%</span></div><div class="bar"><i class="ok" style="width:${100 * t.ok / n}%"></i><i class="bad" style="width:${100 * (n - t.ok) / n}%"></i></div>`;
   return `<div class="prog"><span class="mono">${t.done}/${list.length}</span><span class="mono">${t.done ? pct(t) + ' right' : 'not started'}</span></div>
     <div class="bar"><i class="ok" style="width:${100 * t.ok / n}%"></i><i class="bad" style="width:${100 * (t.done - t.ok) / n}%"></i></div>`;
 }
@@ -425,7 +432,7 @@ function tile(cat, title, meta){
   return `<div class="tile"><button class="main" data-open="${cat}">
       <div class="top"><h3>${esc(title)}</h3><span class="label">${list.length} Q</span></div>
       ${meta ? `<div class="meta">${meta}</div>` : ''}${progBar(cat, list)}</button>
-    <div class="foot"><span>${t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
+    <div class="foot"><span>${/^m:/.test(cat) ? ((S.xp[cat] || {}).done ? 'Finished' : '') : t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
 }
 function feature(cat, title, sub, o){
   o = o || {}; const list = o.list || ids(cat), dis = !list.length;
@@ -438,13 +445,16 @@ const why = t => `<p class="why">${t}</p>`;
 /* ---------- search ---------- */
 let SQ = '';
 const HAY = {};
-function hay(q){ return HAY[q.id] || (HAY[q.id] = [q.id, q.id.replace(/^[A-Z]0*/, '#'), q.ti, q.c, q.q, q.o.join(' '), q.cn, q.sl, q.e.join(' '), q.tk, q.ox.join(' '), LEC[q.L].t, M.batches[q.b].n].join(' \n ').toLowerCase()); }
+function hay(q){ return HAY[q.id] || (HAY[q.id] = [q.id, q.id.replace(/^[A-Z]0*/, '#'), q.ti, q.c, q.q, q.o.join(' '), q.cn, q.sl, q.e.join(' '), q.tk, q.ox.join(' '), LEC[q.L].t, DOC[LEC[q.L].d].en, M.batches[q.b].n].join(' \n ').toLowerCase()); }
 function search(s){
   const toks = s.toLowerCase().split(/\s+/).filter(Boolean); if (!toks.length) return [];
-  return ALL.filter(i => { const h = hay(Q[i]); return toks.every(t => /^\d+$/.test(t) ? (h.includes('#' + t + ' ') || h.includes(t)) : h.includes(t)); });
+  return ALL.filter(i => { const h = hay(Q[i]); return toks.every(t => { const m = t.match(/^([fmr])0*(\d+)$/); if (m) return i[0].toLowerCase() === m[1] && +i.slice(1) === +m[2]; return /^\d+$/.test(t) ? (h.includes('#' + t + ' ') || h.includes(t)) : h.includes(t); }); });
 }
 function markT(text, s){
-  let h = esc(text); s.toLowerCase().split(/\s+/).filter(t => t.length > 1).forEach(t => { const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'); h = h.replace(re, '<mark class="sm">$1</mark>'); }); return h;
+  const toks = s.toLowerCase().split(/\s+/).filter(t => t.length > 1).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!toks.length) return esc(text);
+  const re = new RegExp('(' + toks.sort((a, b) => b.length - a.length).join('|') + ')', 'ig');
+  return text.split(re).map((p, k) => k % 2 ? '<mark class="sm">' + esc(p) + '</mark>' : esc(p)).join('');
 }
 function searchRes(){
   const box = document.getElementById('sres'); if (!box) return;
@@ -452,10 +462,13 @@ function searchRes(){
   const r = search(SQ); box.hidden = false;
   box.innerHTML = `<div class="hd"><span class="label">${r.length} question${r.length === 1 ? '' : 's'} match “${esc(SQ)}”</span>${r.length ? `<span class="row"><button class="go" data-act="searchgo">Practise these ${r.length} →</button>${pdfBtn('s', 'PDF')}</span>` : ''}</div>
    ${r.slice(0, 60).map(i => { const q = Q[i]; return `<button class="it" data-sopen="${i}"><span class="qid">${i}</span><span class="tx">${markT(q.q.length > 170 ? q.q.slice(0, 170) + '…' : q.q, SQ)}</span><span class="sub">${esc(LEC[q.L].t)} · ${KIND[q.k]} · ${esc(M.batches[q.b].n)}</span></button>`; }).join('')}
+   ${!r.length && /[\u0600-\u06FF]/.test(SQ) ? '<div class="hint">The questions are in English: search in English (for example: preeclampsia, PPH, Bishop).</div>' : ''}
    ${r.length > 60 ? `<div class="hint">Showing the first 60. Use “Practise these” to open all ${r.length}.</div>` : ''}`;
 }
 
 /* ---------- home ---------- */
+const OPEN = {};
+document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.k) OPEN[d.dataset.k] = d.open; }, true);
 function filterPanel(){
   const c = k => S.fsel[k] || [];
   const chip = (k, v, label, n) => `<button class="chip" data-fk="${k}" data-fv="${esc(v)}" aria-pressed="${c(k).includes(v)}">${label}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
@@ -467,8 +480,8 @@ function filterPanel(){
     ${grp('k', ['F','M','R'].map(v => chip('k', v, KIND[v], cnt('k', v))).join(''))}
     ${grp('b', Object.keys(M.batches).map(v => chip('b', v, esc(M.batches[v].n), cnt('b', v))).join(''))}
     ${grp('d', Object.keys(DOC).map(v => chip('d', v, esc(DOC[v].en), cnt('d', v))).join(''))}
-    <details ${c('L').length ? 'open' : ''}><summary class="label" style="cursor:pointer">Lecture${c('L').length ? ' · ' + c('L').length + ' chosen' : ''}</summary><div style="margin-top:8px">${grp('L', LEC.map((l, i) => cnt('L', String(i)) ? chip('L', String(i), esc(l.t), cnt('L', String(i))) : '').join(''))}</div></details>
-    <details ${c('g').length || c('t').length || c('lv').length ? 'open' : ''}><summary class="label" style="cursor:pointer">More: QBank group, question type, level</summary><div style="margin-top:8px;display:grid;gap:14px">
+    <details data-k="fL" ${c('L').length || OPEN.fL ? 'open' : ''}><summary class="label" style="cursor:pointer">Lecture${c('L').length ? ' · ' + c('L').length + ' chosen' : ''}</summary><div style="margin-top:8px">${grp('L', LEC.map((l, i) => cnt('L', String(i)) ? chip('L', String(i), esc(l.t), cnt('L', String(i))) : '').join(''))}</div></details>
+    <details data-k="fM" ${c('g').length || c('t').length || c('lv').length || OPEN.fM ? 'open' : ''}><summary class="label" style="cursor:pointer">More: QBank group, question type, level</summary><div style="margin-top:8px;display:grid;gap:14px">
       ${grp('g', GRP.map((g, i) => chip('g', String(i), esc(g), cnt('g', String(i)))).join(''))}
       ${grp('t', Object.keys(TYPES).map(v => chip('t', v, esc(TYPES[v]), cnt('t', v))).join(''))}
       ${grp('lv', ['1','2','3'].map(v => chip('lv', v, 'Level ' + v, cnt('lv', v))).join(''))}
@@ -486,7 +499,7 @@ function home(){
   const ncor = ALL.filter(i => (Q[i].f || '').includes('c')).length;
   app.innerHTML = `
   <header class="hero"><div class="mark" aria-hidden="true"></div><div><h1>OB/GYN QBank</h1>
-    <p>The committee QBank past papers (Final and Mini OSCE) with every key checked against the doctors’ slides, a full explanation, and the slide page to read. Batch Hayat 2026–27.</p></div></header>
+    <p>All the committee past papers for OB/GYN, explained and sorted by lecture. Batch Hayat 2026–27.</p></div></header>
   <div class="stats">
     <div class="stat"><b>${ALL.length}</b><span>questions</span></div>
     <div class="stat"><b>${nF}</b><span>Final</span></div>
@@ -497,31 +510,31 @@ function home(){
   <div class="searchbox"><div class="in"><span aria-hidden="true">⌕</span><input id="q" type="text" enterkeyhint="search" placeholder="Search any word or number: HELLP, Bishop, F123, misoprostol…" value="${esc(SQ)}" autocomplete="off" aria-label="Search questions"><button class="x" data-act="sclear" aria-label="Clear search" ${SQ ? '' : 'hidden'}>✕</button></div><div class="sres" id="sres" hidden></div></div>
 
   <section class="sect" id="mini"><h2>Mini OSCE papers</h2>
-    ${why(`Exam rehearsal like the doctors’ Mini OSCE: stations of 4–6 questions on one topic, answered in order with no going back. The marks and explanations appear at the end. All ${nM} Mini OSCE questions in the QBank (batch Vein).`)}
+    ${why('Like the real Mini OSCE: short stations, no going back, marks at the end. The Hayat recalls show the answer after each question.')}
     <div class="grid">${M.mpapers.map((p, k) => tile('m:' + k, 'Mini paper ' + (k + 1), `${p.length} stations · exam mode`)).join('')}
-    ${tile('r', 'Hayat recalls', `${M.recalls.length} stations · 12 Nov 2026`)}</div>
+    ${tile('r', 'Hayat recalls', `${M.recalls.length} stations · 12 Nov 2026 · answers as you go`)}</div>
   </section>
 
   <section class="sect" id="final"><h2>Final papers</h2>
-    ${why(`All ${nF} Final questions split into ${M.papers.length} papers of about 50, each mixing every topic in the same proportion. Answer and explanation show after each question.`)}
+    ${why('Papers of about 50 questions mixing all topics, with the answer after each question.')}
     <div class="grid">${M.papers.map((p, k) => tile('p:' + k, 'Final paper ' + (k + 1), 'All topics')).join('')}</div>
   </section>
 
   <section class="sect" id="lectures"><h2>By doctor and lecture</h2>
-    ${why('Every question is placed under the lecture that teaches it. Do the lecture set right after you study it.')}
+    ${why('Do a lecture’s questions right after you study it.')}
     <div class="docs">${Object.keys(DOC).map(d => { const dl = ids('d:' + d), t = tally('d:' + d, dl); const ls = LEC.map((l, i) => [l, i]).filter(([l, i]) => l.d === d && ids('L:' + i).length);
-      return `<details class="doc"><summary><div><h3>${esc(DOC[d].en)}</h3><div class="s">${ls.length} lectures · ${dl.length} questions${t.done ? ' · ' + t.done + ' done' : ''}</div></div><span class="label">▾</span></summary>
+      return `<details class="doc" data-k="d${d}" ${OPEN['d' + d] ? 'open' : ''}><summary><div><h3>${esc(DOC[d].en)}</h3><div class="s">${ls.length} lectures · ${dl.length} questions${t.done ? ' · ' + t.done + ' done' : ''}</div></div><span class="label">▾</span></summary>
         <div class="lecs">${ls.map(([l, i]) => { const li = ids('L:' + i), tt = tally('L:' + i, li); return `<button class="lec" data-open="L:${i}"><span>${esc(l.t)}</span><span class="n">${tt.done ? tt.done + '/' : ''}${li.length} Q</span>${tt.done ? `<div class="bar"><i class="ok" style="width:${100 * tt.ok / li.length}%"></i><i class="bad" style="width:${100 * (tt.done - tt.ok) / li.length}%"></i></div>` : ''}</button>`; }).join('')}
         <div class="lec" style="cursor:default"><span class="row"><button class="go" data-open="d:${d}">All of ${esc(DOC[d].en)} (${dl.length}) →</button>${pdfBtn('d:' + d)}</span></div></div></details>`; }).join('')}</div>
   </section>
 
   <section class="sect"><h2>Build your own set</h2>
-    ${why('Combine any filters: for example Mini OSCE + Dr. Hadeel + Repeated, or Final + Soul batch + Got wrong. Then practise them or export them as a PDF.')}
+    ${why('Pick what you want to practise.')}
     ${filterPanel()}
   </section>
 
   <section class="sect"><h2>Repeated questions</h2>
-    ${why('The same idea asked in two or more papers or batches, most repeated first. Reworded versions sit next to each other.')}
+    ${why('Ideas asked more than once, most repeated first.')}
     ${feature('rep', 'Repeated questions', `${rep.length} questions in ${new Set(rep.map(i => Q[i].rs)).size} groups`, {go: 'Start'})}
   </section>
 
@@ -535,12 +548,12 @@ function home(){
   </section>
 
   <section class="sect"><h2>By batch</h2>
-    <p class="note-line">The batch each question came from in the committee QBank. Mini OSCE questions are all from Vein; Hayat is our own batch’s recalls.</p>
+    
     <div class="grid">${Object.keys(M.batches).map(b => tile('b:' + b, M.batches[b].n, M.batches[b].sub)).join('')}</div>
   </section>
 
   <section class="sect"><h2>Save and move your progress</h2>
-    ${why('Progress, flags, crossed-out options, highlights and notes are saved in this browser on this device. To keep a backup or continue on another device, download a progress file or copy a code, then load it there.')}
+    ${why('Your progress is saved on this device. To move it to another device, download the file or copy the code and load it there.')}
     <div class="transfer">
       <div class="row"><button class="btn small" data-act="dlprog">Download progress file</button><button class="btn small" data-act="ulprog">Load a progress file</button><input type="file" id="ulfile" accept=".json,application/json" hidden></div>
       <div class="row"><button class="btn small" data-act="mkcode">Copy progress code</button><span class="msg" id="codemsg"></span></div>
@@ -551,16 +564,14 @@ function home(){
     </div>
   </section>
 
-  <section class="sect about"><h2 style="color:var(--ink)">How this bank was made</h2>
-    <p>Source: the committee QBank (Obstetrics and Gynecology 1), ${nF} Final and ${nM} Mini OSCE past-paper questions from the Athar, Harmony, Hope, Soul, Vein, Wateen and Yaqeen batches, plus ${nR} questions rebuilt from Hayat’s Mini OSCE recalls. The option order is the paper’s order and is the same for everyone, so “answer C” means the same thing to the whole batch.</p>
-    <p>Every key was checked against the doctors’ slides for batch Hayat (pages cited under each question), then against standard references. ${ncor} keys were wrong in the QBank and are marked Corrected, showing what the QBank said and why it changed. Each explanation gives the idea tested, why every option is right or wrong, what the doctor’s slide says, and a button that opens the slides; links to the Wareed sheets, transcripts and the Remake are under it.</p>
+  <section class="sect about"><h2 style="color:var(--ink)">About</h2>
+    <p>The questions are the committee’s past papers (Final and Mini OSCE) plus Hayat’s Mini OSCE recalls. Answers were checked against the doctors’ slides.</p>
     <div class="legendb">
-      <div><span class="badge b-rep">Repeated ×N</span><span>the same idea was asked N times across the papers and batches</span></div>
-      <div><span class="badge b-cor">Corrected</span><span>the QBank key was wrong; the question shows the old key and the correction</span></div>
-      <div><span class="badge b-reb">Rebuilt</span><span>a recall or incomplete question whose options or wording were rebuilt from the student’s memory and the slides</span></div>
+      <div><span class="badge b-rep">Repeated ×N</span><span>asked N times</span></div>
+      <div><span class="badge b-cor">Corrected</span><span>the old answer was wrong; the question shows why</span></div>
+      <div><span class="badge b-reb">Rebuilt</span><span>written again from a student’s memory</span></div>
     </div>
-    <p>How to answer: tick the square beside a letter. Tap an option’s text to cross it out while you think. Keys: A–E answer, ← → move, F flag.</p>
-    <p><button class="rst" data-reset="ALL">Clear all my answers</button> (keeps notes, highlights and flags)</p>
+    <p><button class="rst" data-reset="ALL">Clear all my answers</button></p>
   </section>`;
   searchRes();
 }
@@ -586,11 +597,11 @@ function sourceBlock(q){
   l.slx.forEach(x => { if (x[0] !== first) links.push(`<a target="_blank" rel="noopener" href="${x[0]}">Slides${x[1] ? ': ' + esc(x[1]) : ''}</a>`); });
   if (l.sh) links.push(`<a target="_blank" rel="noopener" href="${l.sh[0]}">Wareed sheet: ${esc(l.sh[1])}</a>`);
   if (l.rn) links.push(`<a target="_blank" rel="noopener" href="${l.rn}">Rand’s transcript</a>`);
-  l.bt.forEach(x => links.push(`<a target="_blank" rel="noopener" href="${x[0]}">Batool’s transcript${x[1] && !x[1].startsWith('!') ? ': ' + esc(x[1]) : ''}</a>`));
+  l.bt.forEach(x => links.push(`<a target="_blank" rel="noopener" href="${x[0]}">${x[1] && x[1].startsWith('!') ? esc(x[1].slice(1)) : 'Batool’s transcript' + (x[1] ? ': ' + esc(x[1]) : '')}</a>`));
   if (l.rd) links.push(`<a target="_blank" rel="noopener" href="${l.rd}">Transcript</a>`);
   links.push(`<a target="_blank" rel="noopener" href="${M.remake}">OBGYN Remake (Ahmed Moath)</a>`);
   if (l.mn) links.push(`<a target="_blank" rel="noopener" href="${l.mn}">Year 5 (M.N.) post</a>`);
-  return `<div class="slide"><span class="label">From the slides${q.s && q.s.length ? '' : ' · not on the slides'}</span>
+  return `<div class="slide"><span class="label">${q.s && q.s.length ? 'From the slides' : 'Where to read it'}</span>
       ${q.sl ? HF(q.id, 'w', q.sl, 'div') : `<div class="src">${q.L === 44 ? 'This lecture is studied from Hacker & Moore, chapter 19 (the doctor’s instruction).' : 'This point is not written on the slides; it comes from the transcripts or the textbook.'}</div>`}
       ${q.s && q.s.length ? `<div class="src">${slideRefs(q)}</div>` : ''}
       <a class="takeme" target="_blank" rel="noopener" href="${first}"><span class="ar">خذني لمكان الشرح</span> ↗<span class="mono" style="font-weight:500;font-size:12px">${pages}</span></a>
@@ -623,8 +634,9 @@ function quiz(){
   const exam = isExam(view.c) && !view.rev;
   if (view.i >= list.length){ results(); return; }
   const id = list[view.i], q = Q[id];
-  const picked = exam ? (S.a[view.c] || {})[id] : ans(view.c, id);
-  const answered = !exam && picked !== undefined;
+  const xrev = isExam(view.c) && view.rev;
+  const picked = (exam || xrev) ? (S.a[view.c] || {})[id] : ans(view.c, id);
+  const answered = xrev || (!exam && picked !== undefined);
   const sk = S.sk[id] || [];
   const t = tally(view.c, list);
   const stn = stationOf(view.c, id);
@@ -642,7 +654,7 @@ function quiz(){
     <button class="iconbtn" data-act="home">← Home</button>
     <div class="t"><b>${esc(catName(view.c))}${view.rev ? ' · review' : exam ? ' · exam' : ''}</b><span class="mono" style="white-space:nowrap">Q ${view.i + 1}/${list.length}${exam ? ` · ${Object.keys(S.a[view.c] || {}).filter(x => list.includes(x)).length} answered` : ` · ${t.done} done · ${t.ok} right`}</span></div>
     <button class="iconbtn" data-act="pal" aria-expanded="${!!view.pal}" aria-label="All questions">${view.pal ? '✕' : '☰'}</button>
-    <button class="iconbtn" data-pdf="${view.c}" title="Export this set as PDF">PDF</button>
+    ${exam ? '' : `<button class="iconbtn" data-pdf="${view.c}" title="Export this set as PDF">PDF</button>`}
   </div><div class="track">${list.map((x, k) => `<i class="${k === view.i ? 'cur' : exam ? ((S.a[view.c] || {})[x] !== undefined ? 'don' : '') : st(view.c, x)}"></i>`).join('')}</div></div>
   ${pal}
   <article class="card">
@@ -663,12 +675,12 @@ function nav(list, exam){
   if (!nb){ nb = document.createElement('div'); nb.id = 'navbar'; nb.className = 'navbar'; document.body.appendChild(nb); }
   const last = view.i === list.length - 1;
   nb.innerHTML = `<div class="rw"><button class="btn" data-act="prev" ${view.i === 0 || exam ? 'disabled' : ''}>← Prev</button>
-    <button class="btn primary" data-act="next">${last ? (exam ? 'Finish paper' : 'See results') : 'Next →'}</button>
+    <button class="btn primary" data-act="next">${last ? (exam ? (view.sure ? view.sure + ' unanswered · tap again' : 'Finish paper') : 'See results') : 'Next →'}</button>
     <span class="kbd">A–E answer · ← → move · F flag</span></div>`;
 }
 function results(){
   const cat = view.c, list = ids(cat), exam = isExam(cat);
-  if (exam){ S.xp[cat] = Object.assign(S.xp[cat] || {}, {done: Date.now()}); list.forEach(i => { const x = (S.a[cat] || {})[i]; if (x !== undefined) S.last[i] = [x, Date.now()]; }); save(); }
+  if (exam && !(S.xp[cat] || {}).done){ S.xp[cat] = Object.assign(S.xp[cat] || {}, {done: Date.now()}); list.forEach(i => { const x = (S.a[cat] || {})[i]; if (x !== undefined) S.last[i] = [x, Date.now()]; }); save(); }
   const pick = i => exam ? (S.a[cat] || {})[i] : ans(cat, i);
   let ok = 0, done = 0; list.forEach(i => { const x = pick(i); if (x !== undefined){ done++; if (x === Q[i].a) ok++; } });
   const p = list.length ? Math.round(100 * ok / list.length) : 0;
@@ -678,11 +690,11 @@ function results(){
   <div class="topbar"><div class="rw"><button class="iconbtn" data-act="home">← Home</button><div class="t"><b>${esc(catName(cat))}</b><span>Results</span></div></div></div>
   <article class="card">
     <div class="score"><div class="big mono">${p}%</div><div><h2 style="font-size:22px">${ok} of ${list.length} correct</h2>
-      <div class="msg">${list.length - done ? (list.length - done) + ' not answered. ' : ''}${p >= 80 ? 'Strong. Review the misses and move on.' : p >= 60 ? 'Good base. Read the explanations of the misses.' : 'Go through the explanations, then retry this set.'}</div></div></div>
+      <div class="msg">${list.length - done ? (list.length - done) + ' not answered. ' : ''}${p === 100 ? 'Full marks.' : p >= 80 ? 'Strong. Review the misses and move on.' : p >= 60 ? 'Good base. Read the explanations of the misses.' : 'Go through the explanations, then retry this set.'}</div></div></div>
     <div class="rows">${Object.entries(byL).sort((a, b) => b[1].n - a[1].n).map(([L, t]) => `<div class="rrow"><span>${esc(LEC[L].t)}</span><div class="bar"><i style="width:${100 * t.ok / t.n}%"></i></div><span class="mono" style="text-align:right">${t.ok}/${t.n}</span></div>`).join('')}</div>
-    ${wrong.length ? `<div><span class="label">Missed or unanswered</span><div class="wronglist" style="margin-top:8px">${wrong.map(([i, k]) => `<button data-review="${k}"><span class="mono" style="color:var(--muted)">Q${k + 1}</span> · ${esc(Q[i].q.slice(0, 160))}</button>`).join('')}</div></div>` : ''}
+    ${wrong.length ? `<div><span class="label">Missed or unanswered</span><div class="wronglist" style="margin-top:8px">${wrong.map(([i, k]) => `<button data-review="${k}"><span class="mono" style="color:var(--muted)">Q${k + 1}</span> · ${esc(Q[i].q.length > 160 ? Q[i].q.slice(0, Q[i].q.lastIndexOf(' ', 157)) + '…' : Q[i].q)}</button>`).join('')}</div></div>` : ''}
     <div class="acts">
-      ${exam ? '<button class="btn primary" data-act="review">Review with explanations</button>' : ''}
+      ${exam ? '<button class="btn primary" data-act="review">Review with explanations</button>' : '<button class="btn primary" data-review="0">Review answers</button>'}
       ${wrong.length ? '<button class="btn" data-act="retrywrong">Retry the missed ones</button>' : ''}
       <button class="btn" data-act="retry">Reset and retry this set</button>
       <button class="btn" data-act="home">Back to home</button>
@@ -696,7 +708,7 @@ function render(){
   if (view.name === 'home') home(); else quiz();
 }
 function open(cat){
-  if (['mis','cor','flag','notes'].includes(cat)){ S.snap[cat] = live[cat](); if (cat === 'mis' || cat === 'cor') S.a[cat] = {}; save(); }
+  if (['mis','cor','flag','notes'].includes(cat)){ S.snap[cat] = live[cat](); if (cat === 'mis') S.a[cat] = {}; save(); }
   if (cat === 'f'){ S.snap.f = filterIds(); save(); }
   const list = ids(cat); if (!list.length) return;
   if (isExam(cat)){
@@ -708,11 +720,12 @@ function open(cat){
   }
   if (cat === 'notes'){ go({name:'quiz', c:cat, i:0}); return; }
   const first = list.findIndex(i => ans(cat, i) === undefined);
-  go({name:'quiz', c:cat, i: first === -1 ? list.length : first});
+  go({name:'quiz', c:cat, i: first === -1 ? (/^(p|L|d|b|r|rep)\b/.test(cat) ? list.length : 0) : first});
 }
 function pick(k){
   const list = ids(view.c), id = list[view.i];
-  if (isExam(view.c) && !view.rev){ (S.a[view.c] = S.a[view.c] || {})[id] = k; save(); quiz(); return; }
+  if (isExam(view.c) && view.rev) return;
+  if (isExam(view.c)){ (S.a[view.c] = S.a[view.c] || {})[id] = k; save(); quiz(); return; }
   if (ans(view.c, id) !== undefined) return;
   (S.a[view.c] = S.a[view.c] || {})[id] = k;
   S.last[id] = [k, Date.now()];
@@ -722,6 +735,9 @@ function pick(k){
 function move(d){
   const list = ids(view.c), exam = isExam(view.c) && !view.rev;
   if (exam && d < 0) return;
+  if (exam && d > 0 && view.i === list.length - 1){ const un = list.filter(i => (S.a[view.c] || {})[i] === undefined).length;
+    if (un && !view.sure){ view.sure = un; nav(list, true); return; } }
+  view.sure = 0;
   view.i = Math.max(0, Math.min(list.length, view.i + d));
   if (exam){ S.xp[view.c] = Object.assign(S.xp[view.c] || {}, {pos: view.i}); save(); }
   if (view.i >= list.length && view.rev){ view.rev = false; }
@@ -740,11 +756,11 @@ function doReset(cat){
 /* ---------- PDF ---------- */
 let pdfCat = null;
 function pdfDialog(cat){
-  if (cat === 'f'){ S.snap.f = filterIds(); save(); }
-  if (cat === 's'){ S.snap.s = search(SQ); save(); }
+  if (view.name === 'home' && cat === 'f'){ S.snap.f = filterIds(); save(); }
+  if (view.name === 'home' && cat === 's'){ S.snap.s = search(SQ); save(); }
   pdfCat = cat; const n = ids(cat).length; if (!n) return;
   const d = document.createElement('div'); d.className = 'dlg'; d.id = 'dlg';
-  d.innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-label="Export PDF"><h3>Export as PDF</h3><div class="msg">${esc(catName(cat))} · ${n} questions. Your browser’s print window opens; choose “Save as PDF”.</div>
+  d.innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-label="Export PDF"><h3>Export as PDF</h3><div class="msg">${esc(catName(cat))} · ${n} question${n === 1 ? '' : 's'}. Your browser’s print window opens; choose “Save as PDF”.</div>
     <div class="opt3"><button data-pmode="q"><b>Questions only</b><small>With an answer key on the last page</small></button>
     <button data-pmode="a"><b>Questions with answers</b><small>The correct option in bold under each question</small></button>
     <button data-pmode="e"><b>With a short explanation</b><small>Answer, the idea tested, the slide point and its page</small></button></div>
@@ -802,10 +818,10 @@ document.addEventListener('click', e => {
   if (b.dataset.pdf){ pdfDialog(b.dataset.pdf); return; }
   if (b.dataset.pmode){ const d = document.getElementById('dlg'); if (d) d.remove(); buildPrint(pdfCat, b.dataset.pmode); return; }
   if (b.dataset.pick !== undefined){ pick(+b.dataset.pick); return; }
-  if (b.dataset.fk){ const k = b.dataset.fk, v = b.dataset.fv, c = S.fsel[k] || []; S.fsel[k] = c.includes(v) ? c.filter(x => x !== v) : c.concat(v); save(); const y = window.scrollY; home(); window.scrollTo({top: y}); return; }
+  if (b.dataset.fk){ const k = b.dataset.fk, v = b.dataset.fv, c = S.fsel[k] || []; S.fsel[k] = c.includes(v) ? c.filter(x => x !== v) : c.concat(v); save(); const y = window.scrollY; home(); window.scrollTo({top: y}); const nb = [...app.querySelectorAll('[data-fk]')].find(x => x.dataset.fk === k && x.dataset.fv === v); if (nb) nb.focus({preventScroll: true}); return; }
   if (b.dataset.fclear){ if (b.dataset.fclear === 'ALL') S.fsel = {}; else delete S.fsel[b.dataset.fclear]; save(); const y = window.scrollY; home(); window.scrollTo({top: y}); return; }
   if (b.dataset.sopen){ S.snap.s = [b.dataset.sopen]; save(); go({name:'quiz', c:'s', i:0}); return; }
-  if (b.dataset.jump !== undefined){ view.i = +b.dataset.jump; view.pal = false; render(); window.scrollTo({top:0}); return; }
+  if (b.dataset.jump !== undefined){ view.i = +b.dataset.jump; view.pal = false; if (isExam(view.c) && !view.rev){ S.xp[view.c] = Object.assign(S.xp[view.c] || {}, {pos: Math.max(view.i, (S.xp[view.c] || {}).pos || 0)}); save(); } render(); window.scrollTo({top:0}); return; }
   if (b.dataset.review !== undefined){ view = {name:'quiz', c:view.c, i:+b.dataset.review, rev: isExam(view.c)}; render(); window.scrollTo({top:0}); return; }
   const a = b.dataset.act;
   if (a === 'home') go({name:'home'});
@@ -830,6 +846,7 @@ document.addEventListener('click', e => {
   else if (a === 'loadcode'){
     const msg = document.getElementById('loadmsg'), x = readCode(document.getElementById('codein').value);
     if (!x){ msg.textContent = 'That code was not recognised. Copy the whole code, starting with ' + CODE + ':'; msg.className = 'msg bad'; return; }
+    if (Object.keys(S.last).length && !confirm('Replace the progress on this device with the loaded one?')) return;
     S = x; save(); home(); window.scrollTo({top:0}); toast('Progress loaded');
   }
   else if (a === 'dlprog'){
@@ -840,7 +857,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id !== 'ulfile' || !e.target.files[0]) return;
-  const r = new FileReader(); r.onload = () => { let x = null; try { x = readState(JSON.parse(r.result)); } catch(err) {} if (!x){ toast('That file is not a progress file from this bank'); return; } S = x; save(); home(); toast('Progress loaded'); };
+  const r = new FileReader(); r.onload = () => { let x = null; try { x = readState(JSON.parse(r.result)); } catch(err) {} if (!x){ toast('That file is not a progress file from this bank'); return; } if (Object.keys(S.last).length && !confirm('Replace the progress on this device with the loaded one?')) return; S = x; save(); home(); toast('Progress loaded'); };
   r.readAsText(e.target.files[0]);
 });
 let sT = null;
@@ -854,14 +871,15 @@ document.addEventListener('input', e => {
   const nb = app.querySelector('.notebtn'); if (nb){ nb.setAttribute('aria-pressed', String(!!S.nt[id])); nb.querySelector('span').textContent = S.nt[id] ? 'Note ✓' : 'Note'; }
 });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target && e.target.id === 'q'){ const r = search(SQ); if (r.length){ S.snap.s = r; save(); open('s'); } e.preventDefault(); return; }
   if (e.key === 'Escape'){ const d = document.getElementById('dlg'); if (d) d.remove(); return; }
   if (view.name !== 'quiz' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.target && /TEXTAREA|INPUT/.test(e.target.tagName)) return;
-  const list = ids(view.c); if (view.i >= list.length) return;
+  const list = ids(view.c); if (view.i >= list.length){ if (e.key === 'ArrowLeft' && !isExam(view.c)) move(-1); return; }
   const k = e.key.toLowerCase(), idx = 'abcde'.indexOf(k) >= 0 ? 'abcde'.indexOf(k) : '12345'.indexOf(k);
   if (idx >= 0 && k.length === 1){ const id = list[view.i]; if (isExam(view.c) && !view.rev ? true : ans(view.c, id) === undefined) pick(idx); e.preventDefault(); }
   else if (k === 'f'){ const id = list[view.i]; if (S.fl[id]) delete S.fl[id]; else S.fl[id] = 1; save(); quiz(); }
-  else if (e.key === 'ArrowRight' || e.key === 'Enter'){ move(1); e.preventDefault(); }
+  else if (e.key === 'ArrowRight'){ move(1); e.preventDefault(); }
   else if (e.key === 'ArrowLeft'){ move(-1); e.preventDefault(); }
 });
 window.addEventListener('afterprint', () => { document.getElementById('print').innerHTML = ''; });
@@ -924,12 +942,13 @@ route();
 </script>
 <script>
 (function(){
-  var N = 7, V = '2', done = 0, failed = 0, slow, bar = document.getElementById('bbar'), msg = document.getElementById('bmsg');
+  var N = 7, V = '3', done = 0, failed = 0, slow, bar = document.getElementById('bbar'), msg = document.getElementById('bmsg');
   window.__DP = window.__DP || [];
   function step(){ bar.style.width = Math.max(4, Math.round(100 * done / N)) + '%'; }
   function finish(){ clearTimeout(slow); for (var k = 0; k < N; k++) if (typeof window.__DP[k] !== 'string') return fail(); bar.style.width = '100%'; setTimeout(window.__start, 30); }
   function fail(){ clearTimeout(slow); msg.innerHTML = 'Some questions did not load. Check your connection.<br><button class="go" onclick="location.reload()">Try again</button>'; }
-  slow = setTimeout(function(){ msg.innerHTML = 'Slow connection: still loading, it only takes long the first time.<br><span class="ar">النت بطيء، لحظات بس، بالمرة الجاية بيفتح أسرع</span>'; }, 6000);
+  var JOKES = ['الـ cervix لسا ٤ سم… صبرك علينا 😄', 'الأسئلة بالـ second stage، push كمان شوي 💪', 'بنحسب Bishop score للتحميل… ٧ من ١٣ 🤓', 'لا تعمل augmentation، بيكمل لحاله ⏳', 'الـ CTG reassuring، كمّل تنفّس 🫁'], j = 0;
+  slow = setTimeout(function tick(){ msg.innerHTML = '<span class="ar">' + JOKES[j++ % JOKES.length] + '</span>'; slow = setTimeout(tick, 3500); }, 4000);
   for (var k = 0; k < N; k++){ var sc = document.createElement('script'); sc.src = 'd' + k + '.js?v=' + V; sc.async = true;
     sc.onload = function(){ done++; step(); if (done + failed === N) failed ? fail() : finish(); };
     sc.onerror = function(){ failed++; if (done + failed === N) fail(); };
