@@ -399,7 +399,7 @@ function stationOf(cat, id){
 
 /* ---------- routing ---------- */
 let view = {name:'home'}, homeY = 0;
-function go(v){ if (view.name === 'home') homeY = window.scrollY; view = v; render(); window.scrollTo({top: v.name === 'home' ? homeY : 0}); }
+let go = function(v){ if (view.name === 'home') homeY = window.scrollY; view = v; render(); window.scrollTo({top: v.name === 'home' ? homeY : 0}); };
 const pct = t => t.done ? Math.round(100 * t.ok / t.done) + '%' : '';
 function progBar(cat, list){
   const t = tally(cat, list), n = list.length || 1;
@@ -484,18 +484,18 @@ function home(){
   </div>
   <div class="searchbox"><div class="in"><span aria-hidden="true">⌕</span><input id="q" type="text" enterkeyhint="search" placeholder="Search any word or number: HELLP, Bishop, F123, misoprostol…" value="${esc(SQ)}" autocomplete="off" aria-label="Search questions"><button class="x" data-act="sclear" aria-label="Clear search" ${SQ ? '' : 'hidden'}>✕</button></div><div class="sres" id="sres" hidden></div></div>
 
-  <section class="sect"><h2>Mini OSCE papers</h2>
+  <section class="sect" id="mini"><h2>Mini OSCE papers</h2>
     ${why(`Exam rehearsal like the doctors’ Mini OSCE: stations of 4–6 questions on one topic, answered in order with no going back. The marks and explanations appear at the end. All ${nM} Mini OSCE questions in the QBank (batch Vein).`)}
     <div class="grid">${M.mpapers.map((p, k) => tile('m:' + k, 'Mini paper ' + (k + 1), `${p.length} stations · exam mode`)).join('')}
     ${tile('r', 'Hayat recalls', `${M.recalls.length} stations · 12 Nov 2026`)}</div>
   </section>
 
-  <section class="sect"><h2>Final papers</h2>
+  <section class="sect" id="final"><h2>Final papers</h2>
     ${why(`All ${nF} Final questions split into ${M.papers.length} papers of about 50, each mixing every topic in the same proportion. Answer and explanation show after each question.`)}
     <div class="grid">${M.papers.map((p, k) => tile('p:' + k, 'Final paper ' + (k + 1), 'All topics')).join('')}</div>
   </section>
 
-  <section class="sect"><h2>By doctor and lecture</h2>
+  <section class="sect" id="lectures"><h2>By doctor and lecture</h2>
     ${why('Every question is placed under the lecture that teaches it. Do the lecture set right after you study it.')}
     <div class="docs">${Object.keys(DOC).map(d => { const dl = ids('d:' + d), t = tally('d:' + d, dl); const ls = LEC.map((l, i) => [l, i]).filter(([l, i]) => l.d === d && ids('L:' + i).length);
       return `<details class="doc"><summary><div><h3>${esc(DOC[d].en)}</h3><div class="s">${ls.length} lectures · ${dl.length} questions${t.done ? ' · ' + t.done + ' done' : ''}</div></div><span class="label">▾</span></summary>
@@ -895,7 +895,19 @@ app.addEventListener('click', e => {
 }, true);
 document.addEventListener('pointerdown', e => { if (!bar.hidden && !e.target.closest('.hlbar') && !e.target.closest('mark.hl')) setTimeout(() => { if (!selParts()) hideBar(); }, 0); });
 
+/* deep links from the guide: #L:12 (lecture), #d:hadeel, #m:0, #p:0, #r, #b:soul, #rep; #mini / #final / #lectures scroll to a section */
+function route(){
+  const h = decodeURIComponent((location.hash || '').slice(1)); if (!h) return false;
+  if (/^(mini|final|lectures)$/.test(h)){ if (view.name !== 'home') go({name:'home'}); setTimeout(() => { const el = document.getElementById(h); if (el) el.scrollIntoView({block:'start'}); }, 30); return true; }
+  const ok = /^(L:\d+|d:[a-z]+|m:\d+|p:\d+|b:[a-z]+|r|rep)$/.test(h) && ids(h).length;
+  if (ok){ open(h); return true; }
+  return false;
+}
+window.addEventListener('hashchange', route);
+const _go = go;
+go = function(v){ if (v.name === 'home' && /^#(L|d|m|p|b):|^#r$|^#rep$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search); _go(v); };
 render();
+route();
 })();
 </script>
 </body>
