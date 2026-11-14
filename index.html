@@ -230,6 +230,16 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
 .dlg .opt3 button:hover{border-color:var(--acc);background:var(--acc-soft)}
 .dlg .opt3 small{display:block;color:var(--muted);font-size:13px}
 #print{display:none}
+.boot{min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
+.boot .mark{width:64px;height:64px;animation:spin 2.4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.boot .mark{animation:none}}
+.boot h1{font-size:28px}
+.boot p{margin:0;color:var(--muted);font-size:14.5px}
+.bbar{width:min(280px,70vw);height:8px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);overflow:hidden;margin-top:6px}
+.bbar i{display:block;height:100%;width:4%;background:var(--acc);border-radius:3px;transition:width .3s}
+.bmsg{font-size:13.5px;color:var(--muted);min-height:20px}
+.bmsg button{margin-top:8px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--bg);border-radius:999px;padding:9px 16px;font-size:14px}
 @media (max-width:540px){
   .iconbtn{padding:6px 9px;font-size:13px}
@@ -263,11 +273,13 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
 </style>
 </head>
 <body>
-<div class="wrap" id="app"><div style="padding:40vh 0 0;text-align:center;color:#5E6762;font-family:system-ui,sans-serif">Loading 646 questions…</div></div>
+<div class="wrap" id="app"><div class="boot" id="boot"><div class="mark" aria-hidden="true"></div><h1>OB/GYN QBank</h1>
+<p>Past papers with checked answers and explanations · دفعة حياة</p>
+<div class="bbar" role="progressbar" aria-label="Loading questions" aria-valuemin="0" aria-valuemax="100"><i id="bbar"></i></div>
+<div class="bmsg" id="bmsg">Getting the questions ready…</div></div></div>
 <div id="print"></div>
-<script src="d0.js?v=1"></script><script src="d1.js?v=1"></script><script src="d2.js?v=1"></script><script src="d3.js?v=1"></script><script src="d4.js?v=1"></script><script src="d5.js?v=1"></script><script src="d6.js?v=1"></script>
 <script>
-(function(){
+window.__start = function(){
 'use strict';
 const D = JSON.parse((window.__DP || []).join(''));
 const M = D.meta, Q = {}; D.qs.forEach(q => Q[q.id] = q);
@@ -908,6 +920,20 @@ const _go = go;
 go = function(v){ if (v.name === 'home' && /^#(L|d|m|p|b):|^#r$|^#rep$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search); _go(v); };
 render();
 route();
+};
+</script>
+<script>
+(function(){
+  var N = 7, V = '2', done = 0, failed = 0, slow, bar = document.getElementById('bbar'), msg = document.getElementById('bmsg');
+  window.__DP = window.__DP || [];
+  function step(){ bar.style.width = Math.max(4, Math.round(100 * done / N)) + '%'; }
+  function finish(){ clearTimeout(slow); for (var k = 0; k < N; k++) if (typeof window.__DP[k] !== 'string') return fail(); bar.style.width = '100%'; setTimeout(window.__start, 30); }
+  function fail(){ clearTimeout(slow); msg.innerHTML = 'Some questions did not load. Check your connection.<br><button class="go" onclick="location.reload()">Try again</button>'; }
+  slow = setTimeout(function(){ msg.innerHTML = 'Slow connection: still loading, it only takes long the first time.<br><span class="ar">النت بطيء، لحظات بس، بالمرة الجاية بيفتح أسرع</span>'; }, 6000);
+  for (var k = 0; k < N; k++){ var sc = document.createElement('script'); sc.src = 'd' + k + '.js?v=' + V; sc.async = true;
+    sc.onload = function(){ done++; step(); if (done + failed === N) failed ? fail() : finish(); };
+    sc.onerror = function(){ failed++; if (done + failed === N) fail(); };
+    document.body.appendChild(sc); }
 })();
 </script>
 </body>
