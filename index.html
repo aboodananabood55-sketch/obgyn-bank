@@ -234,6 +234,15 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
 .dlg .opt3 button{text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:11px 13px;cursor:pointer}
 .dlg .opt3 button:hover{border-color:var(--acc);background:var(--acc-soft)}
 .dlg .opt3 small{display:block;color:var(--muted);font-size:13px}
+.inapp{position:relative;direction:rtl;text-align:right;font-family:inherit;background:#fff4e0;border:1px solid #e3b866;border-radius:14px;margin:10px 12px 0;max-width:780px;padding:12px 14px;display:grid;gap:8px;box-shadow:0 0 0 0 rgba(214,150,40,.5);animation:iapulse 2s ease-in-out infinite;color:#4a3410}
+.inapp b{font-size:15.5px}
+.inapp p{margin:0;font-size:14px;line-height:1.6}
+.inapp .row{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start}
+.inapp button,.inapp a{border:1px solid #d9a64a;background:#fff;color:#4a3410;border-radius:999px;padding:6px 14px;font:inherit;font-size:14px;cursor:pointer;text-decoration:none}
+.inapp .x{background:transparent;border-color:transparent;color:#8a6a33}
+@keyframes iapulse{0%,100%{box-shadow:0 0 0 0 rgba(214,150,40,.45)}50%{box-shadow:0 0 0 8px rgba(214,150,40,0)}}
+@media (prefers-reduced-motion:reduce){.inapp{animation:none}}
+@media print{.inapp{display:none!important}}
 #print{display:none}
 .boot{min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
 .boot .spin{width:56px;height:56px;border-radius:50%;border:5px solid var(--sunk);border-top-color:var(--acc);border-right-color:var(--rose);animation:spin .8s linear infinite}
@@ -286,6 +295,30 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
 <div id="print"></div>
 <script>
 window.__start = function(){
+/* in-app browser notice (WhatsApp, Telegram, Instagram, Facebook…): their storage is separate and can be wiped */
+(function(){
+  const ua = navigator.userAgent || '';
+  const force = /[?&]inapp=1/.test(location.search);
+  const inApp = force || /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Telegram|TelegramBot|Line\/|Snapchat|musical_ly|TikTok|BytedanceWebview|; wv\)|GSA\//.test(ua);
+  let hid = false; try { hid = sessionStorage.getItem('obg-inapp-x') === '1'; } catch(e) {}
+  if (!inApp || (hid && !force)) return;
+  const url = location.href.replace(/[?&]inapp=1/, '').replace(/\?$/, '');
+  const android = /Android/i.test(ua);
+  const d = document.createElement('div'); d.className = 'inapp'; d.setAttribute('role', 'alert');
+  d.innerHTML = `<b>⚠️ إنت فاتح الموقع من جوا تطبيق (واتساب، تليجرام، انستا…)</b>
+    <p>تقدّمك وملاحظاتك ممكن تضيع لما تسكّره، لأن متصفح التطبيق إله ذاكرة لحاله. افتح الموقع بالمتصفح (كروم أو Safari) عشان ينحفظ كل إشي.</p>
+    <p style="font-size:13px;opacity:.85">من قائمة التطبيق (⋮ أو ⋯ فوق) اختار "فتح في المتصفح"، أو انسخ الرابط والصقه بالمتصفح.</p>
+    <div class="row">${android ? `<a href="intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end">افتح بكروم</a>` : ''}<button type="button" data-ia="copy">انسخ الرابط</button><button type="button" class="x" data-ia="x">مش هلق</button></div>`;
+  document.body.insertBefore(d, document.body.firstChild);
+  d.addEventListener('click', e => {
+    const b = e.target.closest('[data-ia]'); if (!b) return;
+    if (b.dataset.ia === 'x'){ try { sessionStorage.setItem('obg-inapp-x', '1'); } catch(err) {} d.remove(); return; }
+    const done = () => { b.textContent = 'انتسخ ✓'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt('انسخ الرابط:', url));
+    else prompt('انسخ الرابط:', url);
+  });
+})();
+
 'use strict';
 const D = JSON.parse((window.__DP || []).join(''));
 const M = D.meta, Q = {}; D.qs.forEach(q => Q[q.id] = q);
