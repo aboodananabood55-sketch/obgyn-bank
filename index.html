@@ -294,7 +294,6 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
 <div class="bmsg" id="bmsg">Getting the questions ready…</div></div></div>
 <div id="print"></div>
 <script>
-window.__start = function(){
 /* in-app browser notice (WhatsApp, Telegram, Instagram, Facebook…): their storage is separate and can be wiped */
 (function(){
   const ua = navigator.userAgent || '';
@@ -318,6 +317,9 @@ window.__start = function(){
     else prompt('انسخ الرابط:', url);
   });
 })();
+</script>
+<script>
+window.__start = function(){
 
 'use strict';
 const D = JSON.parse((window.__DP || []).join(''));
