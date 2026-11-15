@@ -440,7 +440,7 @@ function tile(cat, title, meta){
   return `<div class="tile"><button class="main" data-open="${cat}">
       <div class="top"><h3>${esc(title)}</h3><span class="label">${list.length} Q</span></div>
       ${meta ? `<div class="meta">${meta}</div>` : ''}${progBar(cat, list)}</button>
-    <div class="foot"><span>${/^m:/.test(cat) ? ((S.xp[cat] || {}).done ? 'Finished' : '') : t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${/^m:/.test(cat) && !(S.xp[cat] || {}).done ? '' : pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
+    <div class="foot"><span>${/^m:/.test(cat) ? ((S.xp[cat] || {}).done ? 'Finished' : '') : t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
 }
 function feature(cat, title, sub, o){
   o = o || {}; const list = o.list || ids(cat), dis = !list.length;
