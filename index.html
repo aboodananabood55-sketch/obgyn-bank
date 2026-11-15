@@ -160,8 +160,8 @@ details.doc[open]>summary{border-bottom:1px solid var(--line)}
 .opt .tx.struck{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--muted)}
 .opt .mk{font-family:var(--f-mono);font-size:12px;font-weight:600;padding-top:4px}
 .opt.sel{border-color:var(--acc);background:var(--acc-soft)} .opt.sel .ck{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
-.opt.right{border-color:var(--ok);background:var(--ok-soft)} .opt.right .ck{background:var(--ok);border-color:var(--ok);color:#fff} .opt.right .mk{color:var(--ok)}
-.opt.wrong{border-color:var(--bad);background:var(--bad-soft)} .opt.wrong .ck{background:var(--bad);border-color:var(--bad);color:#fff} .opt.wrong .mk{color:var(--bad)}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)} .opt.right .ck{background:var(--ok);border-color:var(--ok);color:var(--surface)} .opt.right .mk{color:var(--ok)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)} .opt.wrong .ck{background:var(--bad);border-color:var(--bad);color:var(--surface)} .opt.wrong .mk{color:var(--bad)}
 .opt.dim{opacity:.7}
 .opt .ck[disabled]{cursor:default}
 .hint{font-size:12.5px;color:var(--muted)}
@@ -299,6 +299,8 @@ const blank = () => ({v:1, a:{}, last:{}, fl:{}, hl:{}, nt:{}, sk:{}, snap:{}, r
 let S = blank();
 try { const raw = localStorage.getItem(KEY); if (raw){ const x = JSON.parse(raw); if (x && x.v === 1) S = Object.assign(blank(), x); } } catch(e) {}
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+/* another tab saved: take its state so neither tab overwrites the other */
+window.addEventListener('storage', e => { if (e.key !== KEY || !e.newValue) return; try { const x = JSON.parse(e.newValue); if (x && x.v === 1){ S = Object.assign(blank(), x); const y = window.scrollY; if (typeof render === 'function'){ render(); window.scrollTo({top: y}); } } } catch(err) {} });
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const DOC = M.docs, LEC = M.lectures, GRP = M.groups;
 const docOf = id => LEC[Q[id].L] ? LEC[Q[id].L].d : null;
@@ -419,7 +421,9 @@ function stationOf(cat, id){
 
 /* ---------- routing ---------- */
 let view = {name:'home'}, homeY = 0;
-let go = function(v){ if (view.name === 'home') homeY = window.scrollY; view = v; render(); window.scrollTo({top: v.name === 'home' ? homeY : 0}); };
+let go = function(v){
+  if (v.name === 'quiz' && view.name !== 'quiz'){ try { history.pushState({bq: 1}, ''); } catch(e) {} }
+  else if (v.name === 'home' && view.name === 'quiz' && history.state && history.state.bq && !go._pop){ go._skip = 1; try { history.back(); } catch(e) {} } if (view.name === 'home') homeY = window.scrollY; view = v; render(); window.scrollTo({top: v.name === 'home' ? homeY : 0}); };
 const pct = t => t.done ? Math.round(100 * t.ok / t.done) + '%' : '';
 function progBar(cat, list){
   if (/^m:/.test(cat) && !(S.xp[cat] || {}).done){ const a = list.filter(i => (S.a[cat] || {})[i] !== undefined).length;
@@ -436,7 +440,7 @@ function tile(cat, title, meta){
   return `<div class="tile"><button class="main" data-open="${cat}">
       <div class="top"><h3>${esc(title)}</h3><span class="label">${list.length} Q</span></div>
       ${meta ? `<div class="meta">${meta}</div>` : ''}${progBar(cat, list)}</button>
-    <div class="foot"><span>${/^m:/.test(cat) ? ((S.xp[cat] || {}).done ? 'Finished' : '') : t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
+    <div class="foot"><span>${/^m:/.test(cat) ? ((S.xp[cat] || {}).done ? 'Finished' : '') : t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${/^m:/.test(cat) && !(S.xp[cat] || {}).done ? '' : pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
 }
 function feature(cat, title, sub, o){
   o = o || {}; const list = o.list || ids(cat), dis = !list.length;
@@ -529,7 +533,7 @@ function home(){
     <div class="docs">${Object.keys(DOC).map(d => { const dl = ids('d:' + d), t = tally('d:' + d, dl); const ls = LEC.map((l, i) => [l, i]).filter(([l, i]) => l.d === d && ids('L:' + i).length);
       return `<details class="doc" data-k="d${d}" ${OPEN['d' + d] ? 'open' : ''}><summary><div><h3>${esc(DOC[d].en)}</h3><div class="s">${ls.length} lectures · ${dl.length} questions${t.done ? ' · ' + t.done + ' done' : ''}</div></div><span class="label">▾</span></summary>
         <div class="lecs">${ls.map(([l, i]) => { const li = ids('L:' + i), tt = tally('L:' + i, li); return `<button class="lec" data-open="L:${i}"><span>${esc(l.t)}</span><span class="n">${tt.done ? tt.done + '/' : ''}${li.length} Q</span>${tt.done ? `<div class="bar"><i class="ok" style="width:${100 * tt.ok / li.length}%"></i><i class="bad" style="width:${100 * (tt.done - tt.ok) / li.length}%"></i></div>` : ''}</button>`; }).join('')}
-        <div class="lec" style="cursor:default"><span class="row"><button class="go" data-open="d:${d}">All of ${esc(DOC[d].en)} (${dl.length}) →</button>${pdfBtn('d:' + d)}</span></div></div></details>`; }).join('')}</div>
+        <div class="lec" style="cursor:default"><span class="row"><button class="go" style="white-space:normal;text-align:start" data-open="d:${d}">All of ${esc(DOC[d].en)} (${dl.length}) →</button>${pdfBtn('d:' + d)}</span></div></div></details>`; }).join('')}</div>
   </section>
 
   <section class="sect"><h2>Build your own set</h2>
@@ -617,7 +621,7 @@ function feedback(q, picked){
     : q.n ? `<div class="note">${isReb ? '<div><span class="badge b-reb">Rebuilt</span></div>' : ''}${HF(id, 'n', q.n, 'div')}</div>` : '';
   const rset = q.rp > 1 ? D.qs.filter(x => x.rs === q.rs && x.id !== id) : [];
   return `<div class="fb">
-    <div class="verdict ${picked === undefined ? '' : ok ? 'ok' : 'bad'}">${picked === undefined ? 'Not answered. The answer is ' + LET[q.a] : ok ? 'Correct' : 'Not quite. The answer is ' + LET[q.a]}</div>
+    <div role="status" aria-live="polite" class="verdict ${picked === undefined ? '' : ok ? 'ok' : 'bad'}">${picked === undefined ? 'Not answered. The answer is ' + LET[q.a] : ok ? 'Correct' : 'Not quite. The answer is ' + LET[q.a]}</div>
     ${note}
     ${q.cn ? `<div class="idea"><span class="label">The idea tested</span>${HF(id, 'cn', q.cn)}</div>` : ''}
     <div><span class="label">Why each option</span><ul class="whyopts">${q.o.map((o, k) => `<li class="${k === q.a ? 'ok' : ''}"><span class="k">${LET[k]}</span>${HF(id, 'x' + k, q.ox[k])}</li>`).join('')}</ul></div>
@@ -649,7 +653,7 @@ function quiz(){
     return `<div class="opt ${cls}"><button class="ck" ${answered ? 'disabled' : `data-pick="${k}"`} aria-label="Answer ${LET[k]}">${ck}</button><span class="k">${LET[k]}</span>${HF(id, 'o' + k, o, 'span', 'tx' + (sk.includes(k) && !answered ? ' struck' : ''))}<span class="mk">${mk}</span></div>`;
   }).join('');
   const lockedBack = exam;
-  const pal = view.pal ? `<div class="palette"><span class="label">${exam ? 'Exam mode: questions you passed are locked' : 'Jump to a question'}</span><div class="g">${list.map((x, k) => { const s = exam ? ((S.a[view.c] || {})[x] !== undefined ? 'don' : '') : st(view.c, x); return `<button class="${s} ${k === view.i ? 'cur' : ''} ${S.fl[x] ? 'fl' : ''} ${hasNote(x) ? 'nt' : ''}" data-jump="${k}" ${exam && k < view.i ? 'disabled' : ''} aria-label="Question ${k + 1}">${k + 1}</button>`; }).join('')}</div></div>` : '';
+  const pal = view.pal ? `<div class="palette"><span class="label">${exam ? 'Exam mode: answer in order; the overview is view-only' : 'Jump to a question'}</span><div class="g">${list.map((x, k) => { const s = exam ? ((S.a[view.c] || {})[x] !== undefined ? 'don' : '') : st(view.c, x); return `<button class="${s} ${k === view.i ? 'cur' : ''} ${S.fl[x] ? 'fl' : ''} ${hasNote(x) ? 'nt' : ''}" data-jump="${k}" ${exam && k !== view.i ? 'disabled' : ''} aria-label="Question ${k + 1}">${k + 1}</button>`; }).join('')}</div></div>` : '';
   const showMeta = answered || view.rev || !/^[pm]:|^r$|^f$|^s$|^rep$|^mis$|^cor$/.test(view.c);
   app.innerHTML = `
   <div class="topbar"><div class="rw">
@@ -694,7 +698,7 @@ function results(){
     <div class="score"><div class="big mono">${p}%</div><div><h2 style="font-size:22px">${ok} of ${list.length} correct</h2>
       <div class="msg">${list.length - done ? (list.length - done) + ' not answered. ' : ''}${p === 100 ? 'Full marks.' : p >= 80 ? 'Strong. Review the misses and move on.' : p >= 60 ? 'Good base. Read the explanations of the misses.' : 'Go through the explanations, then retry this set.'}</div></div></div>
     <div class="rows">${Object.entries(byL).sort((a, b) => b[1].n - a[1].n).map(([L, t]) => `<div class="rrow"><span>${esc(LEC[L].t)}</span><div class="bar"><i style="width:${100 * t.ok / t.n}%"></i></div><span class="mono" style="text-align:right">${t.ok}/${t.n}</span></div>`).join('')}</div>
-    ${wrong.length ? `<div><span class="label">Missed or unanswered</span><div class="wronglist" style="margin-top:8px">${wrong.map(([i, k]) => `<button data-review="${k}"><span class="mono" style="color:var(--muted)">Q${k + 1}</span> · ${esc(Q[i].q.length > 160 ? Q[i].q.slice(0, Q[i].q.lastIndexOf(' ', 157)) + '…' : Q[i].q)}</button>`).join('')}</div></div>` : ''}
+    ${wrong.length ? `<div><span class="label">Missed or unanswered</span><div class="wronglist" style="margin-top:8px">${wrong.map(([i, k]) => `<button data-review="${k}"><span class="mono" style="color:var(--muted)">Q${k + 1}</span> · ${esc(Q[i].q.length > 160 ? Q[i].q.slice(0, Q[i].q.lastIndexOf(' ', 157)).replace(/[.,;:]+$/, '') + '…' : Q[i].q)}</button>`).join('')}</div></div>` : ''}
     <div class="acts">
       ${exam ? '<button class="btn primary" data-act="review">Review with explanations</button>' : '<button class="btn primary" data-review="0">Review answers</button>'}
       ${wrong.length ? '<button class="btn" data-act="retrywrong">Retry the missed ones</button>' : ''}
@@ -705,6 +709,7 @@ function results(){
   const nb = document.getElementById('navbar'); if (nb) nb.remove();
 }
 function render(){
+  lastRender = Date.now();
   hideBar();
   if (view.name !== 'quiz'){ const nb = document.getElementById('navbar'); if (nb) nb.remove(); }
   if (view.name === 'home') home(); else quiz();
@@ -727,18 +732,20 @@ function open(cat){
 function pick(k){
   const list = ids(view.c), id = list[view.i];
   if (isExam(view.c) && view.rev) return;
-  if (isExam(view.c)){ (S.a[view.c] = S.a[view.c] || {})[id] = k; save(); quiz(); return; }
+  if (isExam(view.c)){ (S.a[view.c] = S.a[view.c] || {})[id] = k; view.sure = 0; save(); quiz(); return; }
   if (ans(view.c, id) !== undefined) return;
   (S.a[view.c] = S.a[view.c] || {})[id] = k;
   S.last[id] = [k, Date.now()];
   save(); quiz();
   const fb = app.querySelector('.fb'); if (fb) fb.scrollIntoView({block:'nearest', behavior:'smooth'});
 }
+let lastMove = 0, lastRender = 0;
 function move(d){
+  const now = Date.now(); if (now - lastMove < 350) return; lastMove = now;
   const list = ids(view.c), exam = isExam(view.c) && !view.rev;
   if (exam && d < 0) return;
   if (exam && d > 0 && view.i === list.length - 1){ const un = list.filter(i => (S.a[view.c] || {})[i] === undefined).length;
-    if (un && !view.sure){ view.sure = un; nav(list, true); return; } }
+    if (un && (!view.sure || now - (view.sureAt || 0) < 400)){ if (!view.sure){ view.sure = un; view.sureAt = now; nav(list, true); } return; } }
   view.sure = 0;
   view.i = Math.max(0, Math.min(list.length, view.i + d));
   if (exam){ S.xp[view.c] = Object.assign(S.xp[view.c] || {}, {pos: view.i}); save(); }
@@ -808,11 +815,12 @@ document.addEventListener('click', e => {
     save(); tx.classList.toggle('struck'); return;
   }
   const b = e.target.closest('button'); if (!b) return;
+  if ((b.dataset.review !== undefined || b.dataset.jump !== undefined) && Date.now() - lastRender < 350) return;
   if (b.dataset.reset){
     const c = b.dataset.reset;
-    if (armed === b){ clearTimeout(armTimer); armed = null; doReset(c); return; }
+    if (armed === b){ if (Date.now() - (b._armAt || 0) < 400) return; clearTimeout(armTimer); armed = null; doReset(c); return; }
     if (armed){ armed.classList.remove('arm'); armed.textContent = armed.dataset.txt; }
-    b.dataset.txt = b.textContent; b.textContent = 'Tap again to confirm'; b.classList.add('arm'); armed = b;
+    b._armAt = Date.now(); b.dataset.txt = b.textContent; b.textContent = 'Tap again to confirm'; b.classList.add('arm'); armed = b;
     clearTimeout(armTimer); armTimer = setTimeout(() => { if (armed){ armed.classList.remove('arm'); armed.textContent = armed.dataset.txt; armed = null; } }, 4000);
     return;
   }
@@ -848,7 +856,7 @@ document.addEventListener('click', e => {
   else if (a === 'loadcode'){
     const msg = document.getElementById('loadmsg'), x = readCode(document.getElementById('codein').value);
     if (!x){ msg.textContent = 'That code was not recognised. Copy the whole code, starting with ' + CODE + ':'; msg.className = 'msg bad'; return; }
-    if (Object.keys(S.last).length && !confirm('Replace the progress on this device with the loaded one?')) return;
+    if ((Object.keys(S.last).length || Object.keys(S.nt).length || Object.keys(S.hl).length || Object.keys(S.fl).length || Object.keys(S.xp).length) && !confirm('Replace the progress on this device with the loaded one?')) return;
     S = x; save(); home(); window.scrollTo({top:0}); toast('Progress loaded');
   }
   else if (a === 'dlprog'){
@@ -859,7 +867,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id !== 'ulfile' || !e.target.files[0]) return;
-  const r = new FileReader(); r.onload = () => { let x = null; try { x = readState(JSON.parse(r.result)); } catch(err) {} if (!x){ toast('That file is not a progress file from this bank'); return; } if (Object.keys(S.last).length && !confirm('Replace the progress on this device with the loaded one?')) return; S = x; save(); home(); toast('Progress loaded'); };
+  const r = new FileReader(); r.onload = () => { let x = null; try { x = readState(JSON.parse(r.result)); } catch(err) {} if (!x){ toast('That file is not a progress file from this bank'); return; } if ((Object.keys(S.last).length || Object.keys(S.nt).length || Object.keys(S.hl).length || Object.keys(S.fl).length || Object.keys(S.xp).length) && !confirm('Replace the progress on this device with the loaded one?')) return; S = x; save(); home(); toast('Progress loaded'); };
   r.readAsText(e.target.files[0]);
 });
 let sT = null;
@@ -936,6 +944,7 @@ function route(){
   return false;
 }
 window.addEventListener('hashchange', route);
+window.addEventListener('popstate', () => { if (go._skip){ go._skip = 0; return; } if (view.name === 'quiz'){ go._pop = 1; go({name:'home'}); go._pop = 0; } });
 const _go = go;
 go = function(v){ if (v.name === 'home' && /^#(L|d|m|p|b):|^#r$|^#rep$/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search); _go(v); };
 render();
@@ -944,12 +953,13 @@ route();
 </script>
 <script>
 (function(){
-  var N = 7, V = '3', done = 0, failed = 0, slow, bar = document.getElementById('bbar'), msg = document.getElementById('bmsg');
+  var N = 7, V = '4', done = 0, failed = 0, slow, bar = document.getElementById('bbar'), msg = document.getElementById('bmsg');
   window.__DP = window.__DP || [];
   function step(){ bar.style.width = Math.max(4, Math.round(100 * done / N)) + '%'; }
   function finish(){ clearTimeout(slow); for (var k = 0; k < N; k++) if (typeof window.__DP[k] !== 'string') return fail(); bar.style.width = '100%'; setTimeout(window.__start, 30); }
   function fail(){ clearTimeout(slow); msg.innerHTML = 'Some questions did not load. Check your connection.<br><button class="go" onclick="location.reload()">Try again</button>'; }
   var JOKES = ['الـ cervix لسا ٤ سم… صبرك علينا 😄', 'الأسئلة بالـ second stage، push كمان شوي 💪', 'بنحسب Bishop score للتحميل… ٧ من ١٣ 🤓', 'لا تعمل augmentation، بيكمل لحاله ⏳', 'الـ CTG reassuring، كمّل تنفّس 🫁'], j = 0;
+  setTimeout(function(){ if (done < N) fail(); }, 60000);
   slow = setTimeout(function tick(){ msg.innerHTML = '<span class="ar">' + JOKES[j++ % JOKES.length] + '</span>'; slow = setTimeout(tick, 3500); }, 4000);
   for (var k = 0; k < N; k++){ var sc = document.createElement('script'); sc.src = 'd' + k + '.js?v=' + V; sc.async = true;
     sc.onload = function(){ done++; step(); if (done + failed === N) failed ? fail() : finish(); };
