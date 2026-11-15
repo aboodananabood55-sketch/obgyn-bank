@@ -236,9 +236,9 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
 .dlg .opt3 small{display:block;color:var(--muted);font-size:13px}
 #print{display:none}
 .boot{min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
-.boot .mark{width:64px;height:64px;animation:spin 2.4s linear infinite}
+.boot .spin{width:56px;height:56px;border-radius:50%;border:5px solid var(--sunk);border-top-color:var(--acc);border-right-color:var(--rose);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion:reduce){.boot .mark{animation:none}}
+@media (prefers-reduced-motion:reduce){.boot .spin{animation-duration:1.6s}}
 .boot h1{font-size:28px}
 .boot p{margin:0;color:var(--muted);font-size:14.5px}
 .bbar{width:min(280px,70vw);height:8px;border-radius:4px;background:var(--sunk);border:1px solid var(--line);overflow:hidden;margin-top:6px}
@@ -265,23 +265,21 @@ mark.h1{background:var(--h1)} mark.h2{background:var(--h2)} mark.h3{background:v
   .pq{break-inside:avoid;padding:8px 0 10px;border-bottom:1px solid #ccc}
   .pq .ps{font-weight:700;margin:2px 0 4px}
   .pq ol{margin:2px 0 0;padding-left:22px}
-  .pq li.ans{font-weight:700}
+  .pq .gap{height:2.6em}
+  .pq .pimg{max-width:100%;max-height:9cm;margin:4px 0;display:block}
   .pq .pe{font-size:10pt;margin-top:4px;color:#222}
   .ph{margin-bottom:10px}
   .ph h1{font-size:18pt}
-  .pkey{break-before:page}
   html,body{background:#fff!important}
   .pst{break-after:avoid}
   .case{break-after:avoid}
-  .pkey table{border-collapse:collapse;font-size:10pt}
-  .pkey td{border:1px solid #bbb;padding:2px 6px}
   .pst{break-before:auto;margin:10px 0 2px;font-weight:700;font-size:12.5pt}
   @page{margin:14mm}
 }
 </style>
 </head>
 <body>
-<div class="wrap" id="app"><div class="boot" id="boot"><div class="mark" aria-hidden="true"></div><h1>OB/GYN QBank</h1>
+<div class="wrap" id="app"><div class="boot" id="boot"><div class="spin" aria-hidden="true"></div><h1>OB/GYN QBank</h1>
 <p>Past papers with checked answers and explanations · دفعة حياة</p>
 <div class="bbar" role="progressbar" aria-label="Loading questions" aria-valuemin="0" aria-valuemax="100"><i id="bbar"></i></div>
 <div class="bmsg" id="bmsg">Getting the questions ready…</div></div></div>
@@ -763,35 +761,29 @@ function doReset(cat){
 }
 
 /* ---------- PDF ---------- */
-let pdfCat = null;
 function pdfDialog(cat){
   if (view.name === 'home' && cat === 'f'){ S.snap.f = filterIds(); save(); }
   if (view.name === 'home' && cat === 's'){ S.snap.s = search(SQ); save(); }
-  pdfCat = cat; const n = ids(cat).length; if (!n) return;
-  const d = document.createElement('div'); d.className = 'dlg'; d.id = 'dlg';
-  d.innerHTML = `<div class="box" role="dialog" aria-modal="true" aria-label="Export PDF"><h3>Export as PDF</h3><div class="msg">${esc(catName(cat))} · ${n} question${n === 1 ? '' : 's'}. Your browser’s print window opens; choose “Save as PDF”.</div>
-    <div class="opt3"><button data-pmode="q"><b>Questions only</b><small>With an answer key on the last page</small></button>
-    <button data-pmode="a"><b>Questions with answers</b><small>The correct option in bold under each question</small></button>
-    <button data-pmode="e"><b>With a short explanation</b><small>Answer, the idea tested, the slide point and its page</small></button></div>
-    <button class="btn small" data-act="dlgclose">Cancel</button></div>`;
-  document.body.appendChild(d);
+  if (!ids(cat).length) return;
+  buildPrint(cat);
 }
-function buildPrint(cat, mode){
+function buildPrint(cat){
   const list = ids(cat), P = document.getElementById('print');
   const blocks = cat.startsWith('m:') ? M.mpapers[+cat.split(':')[1]] : cat === 'r' ? M.recalls : null;
   const stnStart = {}; if (blocks) blocks.forEach((b, s) => stnStart[b[0]] = s + 1);
   let lastCase = '';
-  const qh = (id, k) => { const q = Q[id];
+  const imgs = q => [].concat(q.im || []).map(u => `<img class="pimg" src="${esc(u)}" alt="">`).join('');
+  const qh = (id, k) => { const q = Q[id], l = LEC[q.L];
     let h = stnStart[id] ? `<div class="pst">Station ${stnStart[id]}</div>` : '';
     if (q.c && q.c !== lastCase){ h += `<p class="case">${esc(q.c)}</p>`; lastCase = q.c; }
-    h += `<div class="pq"><div class="ps">${k + 1}. ${esc(q.q)} <span style="font-weight:400;color:#666;font-size:9pt">[${id}]</span></div><ol type="A">${q.o.map((o, j) => `<li class="${mode !== 'q' && j === q.a ? 'ans' : ''}">${esc(o)}${mode !== 'q' && j === q.a ? ' ✓' : ''}</li>`).join('')}</ol>`;
-    if (mode === 'e'){ const l = LEC[q.L]; h += `<div class="pe"><b>Answer ${LET[q.a]}.</b> ${esc(q.cn || q.tk)}${(q.f || '').includes('c') ? ` <i>(Corrected: the QBank key was ${LET[q.oa]}.)</i>` : ''}${q.sl ? `<br><b>Slides</b> (${esc(DOC[l.d].en)}, ${esc(l.t)}${q.s && q.s[0] && q.s[0][1].length ? ', slide ' + q.s[0][1].join(', ') : ''}): ${esc(q.sl)}` : ''}</div>`; }
+    h += `<div class="pq"><div class="ps">${k + 1}. ${esc(q.q)} <span style="font-weight:400;color:#666;font-size:9pt">[${id}]</span></div>${imgs(q)}<ol type="A">${q.o.map(o => `<li>${esc(o)}</li>`).join('')}</ol><div class="gap"></div>`;
+    h += `<div class="pe"><b>Answer ${LET[q.a]}.</b> ${esc(q.cn || q.tk)}${(q.f || '').includes('c') ? ` <i>(Corrected: the QBank key was ${LET[q.oa]}.)</i>` : ''}${q.sl ? `<br><b>Slides</b> (${esc(DOC[l.d].en)}, ${esc(l.t)}${q.s && q.s[0] && q.s[0][1].length ? ', slide ' + q.s[0][1].join(', ') : ''}): ${esc(q.sl)}` : ''}</div>`;
     return h + '</div>'; };
-  P.innerHTML = `<div class="ph"><h1>${esc(catName(cat))}</h1><div>OB/GYN QBank · ${list.length} questions · ${{q:'questions only', a:'with answers', e:'with short explanations'}[mode]}</div></div>
-    ${list.map(qh).join('')}
-    ${mode === 'q' ? `<div class="pkey"><h2>Answer key</h2><table><tr>${list.map((id, k) => `<td>${k + 1}. ${LET[Q[id].a]}</td>${(k + 1) % 10 === 0 ? '</tr><tr>' : ''}`).join('')}</tr></table></div>` : ''}`;
+  P.innerHTML = `<div class="ph"><h1>${esc(catName(cat))}</h1><div>OB/GYN QBank · ${list.length} questions · answer under each question (cover it while you think)</div></div>${list.map(qh).join('')}`;
   const t = document.title; document.title = catName(cat) + ' · OB-GYN QBank';
-  setTimeout(() => { window.print(); document.title = t; }, 60);
+  const go = () => setTimeout(() => { window.print(); document.title = t; }, 60);
+  const pend = [...P.querySelectorAll('img')].filter(i => !i.complete);
+  if (!pend.length) go(); else { let n = pend.length; const one = () => { if (--n === 0) go(); }; pend.forEach(i => { i.onload = i.onerror = one; }); setTimeout(() => { if (n > 0){ n = -1; go(); } }, 8000); }
 }
 function toast(msg){ const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
 
@@ -826,7 +818,6 @@ document.addEventListener('click', e => {
   }
   if (b.dataset.open){ open(b.dataset.open); return; }
   if (b.dataset.pdf){ pdfDialog(b.dataset.pdf); return; }
-  if (b.dataset.pmode){ const d = document.getElementById('dlg'); if (d) d.remove(); buildPrint(pdfCat, b.dataset.pmode); return; }
   if (b.dataset.pick !== undefined){ pick(+b.dataset.pick); return; }
   if (b.dataset.fk){ const k = b.dataset.fk, v = b.dataset.fv, c = S.fsel[k] || []; S.fsel[k] = c.includes(v) ? c.filter(x => x !== v) : c.concat(v); save(); const y = window.scrollY; home(); window.scrollTo({top: y}); const nb = [...app.querySelectorAll('[data-fk]')].find(x => x.dataset.fk === k && x.dataset.fv === v); if (nb) nb.focus({preventScroll: true}); return; }
   if (b.dataset.fclear){ if (b.dataset.fclear === 'ALL') S.fsel = {}; else delete S.fsel[b.dataset.fclear]; save(); const y = window.scrollY; home(); window.scrollTo({top: y}); return; }
@@ -957,10 +948,8 @@ route();
   window.__DP = window.__DP || [];
   function step(){ bar.style.width = Math.max(4, Math.round(100 * done / N)) + '%'; }
   function finish(){ clearTimeout(slow); for (var k = 0; k < N; k++) if (typeof window.__DP[k] !== 'string') return fail(); bar.style.width = '100%'; setTimeout(window.__start, 30); }
-  function fail(){ clearTimeout(slow); msg.innerHTML = 'Some questions did not load. Check your connection.<br><button class="go" onclick="location.reload()">Try again</button>'; }
-  var JOKES = ['الـ cervix لسا ٤ سم… صبرك علينا 😄', 'الأسئلة بالـ second stage، push كمان شوي 💪', 'بنحسب Bishop score للتحميل… ٧ من ١٣ 🤓', 'لا تعمل augmentation، بيكمل لحاله ⏳', 'الـ CTG reassuring، كمّل تنفّس 🫁'], j = 0;
+  function fail(){ clearTimeout(slow); var sp = document.querySelector('.boot .spin'); if (sp) sp.style.display = 'none'; msg.innerHTML = 'Some questions did not load. Check your connection.<br><button class="go" onclick="location.reload()">Try again</button>'; }
   setTimeout(function(){ if (done < N) fail(); }, 60000);
-  slow = setTimeout(function tick(){ msg.innerHTML = '<span class="ar">' + JOKES[j++ % JOKES.length] + '</span>'; slow = setTimeout(tick, 3500); }, 4000);
   for (var k = 0; k < N; k++){ var sc = document.createElement('script'); sc.src = 'd' + k + '.js?v=' + V; sc.async = true;
     sc.onload = function(){ done++; step(); if (done + failed === N) failed ? fail() : finish(); };
     sc.onerror = function(){ failed++; if (done + failed === N) fail(); };
