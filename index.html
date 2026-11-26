@@ -298,6 +298,8 @@ const KEY = 'obgyn-bank-v1', CODE = 'OBG1';
 const blank = () => ({v:1, a:{}, last:{}, fl:{}, hl:{}, nt:{}, sk:{}, snap:{}, rs:{}, xp:{}, fsel:{}});
 let S = blank();
 try { const raw = localStorage.getItem(KEY); if (raw){ const x = JSON.parse(raw); if (x && x.v === 1) S = Object.assign(blank(), x); } } catch(e) {}
+function migXP(){ try { let ch = 0; Object.keys(S.xp || {}).forEach(c => { const a = S.a[c] || {}; Object.keys(a).forEach(i => { if (!S.last[i]){ S.last[i] = [a[i], (S.xp[c] && S.xp[c].done) || Date.now()]; ch = 1; } }); }); if (Object.keys(S.xp || {}).length){ S.xp = {}; ch = 1; } if (ch) localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+migXP();
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
 /* another tab saved: take its state so neither tab overwrites the other */
 window.addEventListener('storage', e => { if (e.key !== KEY || !e.newValue) return; try { const x = JSON.parse(e.newValue); if (x && x.v === 1){ S = Object.assign(blank(), x); const y = window.scrollY; if (typeof render === 'function'){ render(); window.scrollTo({top: y}); } } } catch(err) {} });
@@ -310,7 +312,7 @@ const TYPES = M.types;
 /* ---------- answers ---------- */
 const lastOk = id => S.last[id] ? S.last[id][0] === Q[id].a : null;
 const NOFB = {mis:1, retry:1};
-const isExam = cat => /^m:/.test(cat) || (S.xp[cat] && S.xp[cat].on);
+const isExam = cat => false; /* Mini papers are ordinary sets now (stations kept); S.xp is legacy */
 function ans(cat, id){
   const x = (S.a[cat] || {})[id]; if (x !== undefined) return x;
   if (NOFB[cat] || isExam(cat)) return undefined;
@@ -426,10 +428,7 @@ let go = function(v){
   else if (v.name === 'home' && view.name === 'quiz' && history.state && history.state.bq && !go._pop){ go._skip = 1; try { history.back(); } catch(e) {} } if (view.name === 'home') homeY = window.scrollY; view = v; render(); window.scrollTo({top: v.name === 'home' ? homeY : 0}); };
 const pct = t => t.done ? Math.round(100 * t.ok / t.done) + '%' : '';
 function progBar(cat, list){
-  if (/^m:/.test(cat) && !(S.xp[cat] || {}).done){ const a = list.filter(i => (S.a[cat] || {})[i] !== undefined).length;
-    return `<div class="prog"><span class="mono">${a}/${list.length}</span><span class="mono">${a ? 'in progress · marks at the end' : 'not started'}</span></div><div class="bar"><i style="width:${100 * a / (list.length || 1)}%;background:var(--muted)"></i></div>`; }
   const t = tally(cat, list), n = list.length || 1;
-  if (/^m:/.test(cat)) return `<div class="prog"><span class="mono">score ${t.ok}/${list.length}</span><span class="mono">${Math.round(100 * t.ok / n)}%</span></div><div class="bar"><i class="ok" style="width:${100 * t.ok / n}%"></i><i class="bad" style="width:${100 * (n - t.ok) / n}%"></i></div>`;
   return `<div class="prog"><span class="mono">${t.done}/${list.length}</span><span class="mono">${t.done ? pct(t) + ' right' : 'not started'}</span></div>
     <div class="bar"><i class="ok" style="width:${100 * t.ok / n}%"></i><i class="bad" style="width:${100 * (t.done - t.ok) / n}%"></i></div>`;
 }
@@ -440,7 +439,7 @@ function tile(cat, title, meta){
   return `<div class="tile"><button class="main" data-open="${cat}">
       <div class="top"><h3>${esc(title)}</h3><span class="label">${list.length} Q</span></div>
       ${meta ? `<div class="meta">${meta}</div>` : ''}${progBar(cat, list)}</button>
-    <div class="foot"><span>${/^m:/.test(cat) ? ((S.xp[cat] || {}).done ? 'Finished' : '') : t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
+    <div class="foot"><span>${t.done ? (t.done < list.length ? 'In progress' : 'Finished') : ''}</span><span class="r">${pdfBtn(cat)}${t.done ? resetBtn(cat) : ''}</span></div></div>`;
 }
 function feature(cat, title, sub, o){
   o = o || {}; const list = o.list || ids(cat), dis = !list.length;
@@ -519,8 +518,8 @@ function home(){
   <div class="searchbox"><div class="in"><span aria-hidden="true">⌕</span><input id="q" type="text" enterkeyhint="search" placeholder="Search any word or number: HELLP, Bishop, F123, misoprostol…" value="${esc(SQ)}" autocomplete="off" aria-label="Search questions"><button class="x" data-act="sclear" aria-label="Clear search" ${SQ ? '' : 'hidden'}>✕</button></div><div class="sres" id="sres" hidden></div></div>
 
   <section class="sect" id="mini"><h2>Mini OSCE papers</h2>
-    ${why('Like the real Mini OSCE: short stations, no going back, marks at the end. The Hayat recalls show the answer after each question.')}
-    <div class="grid">${M.mpapers.map((p, k) => tile('m:' + k, 'Mini paper ' + (k + 1), `${p.length} stations · exam mode`)).join('')}
+    ${why('Mini OSCE papers in stations, with the answer and explanation after each question, like the Hayat recalls.')}
+    <div class="grid">${M.mpapers.map((p, k) => tile('m:' + k, 'Mini paper ' + (k + 1), `${p.length} stations`)).join('')}
     ${tile('r', 'Hayat recalls', `${M.recalls.length} stations · 12 Nov 2026 · answers as you go`)}</div>
   </section>
 
@@ -728,7 +727,7 @@ function open(cat){
   }
   if (cat === 'notes'){ go({name:'quiz', c:cat, i:0}); return; }
   const first = list.findIndex(i => ans(cat, i) === undefined);
-  go({name:'quiz', c:cat, i: first === -1 ? (/^(p|L|d|b|r|rep)\b/.test(cat) ? list.length : 0) : first});
+  go({name:'quiz', c:cat, i: first === -1 ? (/^(p|L|d|b|r|m|rep)\b/.test(cat) ? list.length : 0) : first});
 }
 function pick(k){
   const list = ids(view.c), id = list[view.i];
@@ -851,7 +850,7 @@ document.addEventListener('click', e => {
     const msg = document.getElementById('loadmsg'), x = readCode(document.getElementById('codein').value);
     if (!x){ msg.textContent = 'That code was not recognised. Copy the whole code, starting with ' + CODE + ':'; msg.className = 'msg bad'; return; }
     if ((Object.keys(S.last).length || Object.keys(S.nt).length || Object.keys(S.hl).length || Object.keys(S.fl).length || Object.keys(S.xp).length) && !confirm('Replace the progress on this device with the loaded one?')) return;
-    S = x; save(); home(); window.scrollTo({top:0}); toast('Progress loaded');
+    S = x; migXP(); save(); home(); window.scrollTo({top:0}); toast('Progress loaded');
   }
   else if (a === 'dlprog'){
     const bl = new Blob([JSON.stringify(S)], {type:'application/json'}), u = URL.createObjectURL(bl), l = document.createElement('a');
@@ -861,7 +860,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id !== 'ulfile' || !e.target.files[0]) return;
-  const r = new FileReader(); r.onload = () => { let x = null; try { x = readState(JSON.parse(r.result)); } catch(err) {} if (!x){ toast('That file is not a progress file from this bank'); return; } if ((Object.keys(S.last).length || Object.keys(S.nt).length || Object.keys(S.hl).length || Object.keys(S.fl).length || Object.keys(S.xp).length) && !confirm('Replace the progress on this device with the loaded one?')) return; S = x; save(); home(); toast('Progress loaded'); };
+  const r = new FileReader(); r.onload = () => { let x = null; try { x = readState(JSON.parse(r.result)); } catch(err) {} if (!x){ toast('That file is not a progress file from this bank'); return; } if ((Object.keys(S.last).length || Object.keys(S.nt).length || Object.keys(S.hl).length || Object.keys(S.fl).length || Object.keys(S.xp).length) && !confirm('Replace the progress on this device with the loaded one?')) return; S = x; migXP(); save(); home(); toast('Progress loaded'); };
   r.readAsText(e.target.files[0]);
 });
 let sT = null;
